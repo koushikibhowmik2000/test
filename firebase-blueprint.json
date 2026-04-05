@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user profile information and daily progress summary.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID from Firebase Auth." },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "streak": { "type": "integer", "description": "Current daily typing streak." },
+        "lastTestDate": { "type": "string", "description": "Date of the last test taken." },
+        "maxStreak": { "type": "integer", "description": "Highest streak achieved." },
+        "proUntil": { "type": "string", "format": "date-time", "description": "Timestamp until which the user has Pro access." }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "LicenseKey": {
+      "title": "License Key",
+      "description": "Stores valid license keys for Pro access.",
+      "type": "object",
+      "properties": {
+        "key": { "type": "string" },
+        "isUsed": { "type": "boolean" },
+        "usedBy": { "type": "string" },
+        "usedAt": { "type": "string", "format": "date-time" },
+        "durationDays": { "type": "integer", "default": 30 }
+      },
+      "required": ["key", "isUsed"]
+    },
+    "TestResult": {
+      "title": "Typing Test Result",
+      "description": "Stores individual typing test results for analysis.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The user who took the test." },
+        "examType": { "type": "string", "enum": ["RRB", "SSC"] },
+        "wpm": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "errors": { "type": "integer" },
+        "totalChars": { "type": "integer" },
+        "timeElapsed": { "type": "integer" },
+        "isEarlyEnd": { "type": "boolean" },
+        "backspaceCount": { "type": "integer" },
+        "mistypedKeys": { "type": "object" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "examType", "wpm", "accuracy", "errors", "totalChars", "timeElapsed", "isEarlyEnd", "backspaceCount", "mistypedKeys", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profile documents."
+    },
+    "/testResults/{resultId}": {
+      "schema": "TestResult",
+      "description": "Individual test result records."
+    }
+  }
+}

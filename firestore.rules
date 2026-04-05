@@ -1,0 +1,114 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Document ID: {userId}
+    // Fields:
+    //   - uid: string (required) - User ID
+    //   - email: string (required) - User email
+    //   - displayName: string (optional) - User display name
+    //   - photoURL: string (optional) - User photo URL
+    //   - createdAt: timestamp (required) - Creation time
+    //   - streak: number (optional) - Daily streak
+    //   - maxStreak: number (optional) - Maximum streak
+    //   - lastTestDate: string (optional) - Last test date (YYYY-MM-DD) or null
+    //
+    // Collection: testResults
+    // Document ID: auto-generated
+    // Fields:
+    //   - uid: string (required) - User ID
+    //   - examType: string (required) - 'RRB' or 'SSC'
+    //   - wpm: number (required) - Words per minute
+    //   - accuracy: number (required) - Accuracy percentage
+    //   - errors: number (required) - Number of errors
+    //   - totalChars: number (required) - Total characters typed
+    //   - timeElapsed: number (required) - Time elapsed in seconds
+    //   - isEarlyEnd: boolean (required) - Whether test ended early
+    //   - backspaceCount: number (required) - Number of backspaces used
+    //   - mistypedKeys: map (required) - Map of mistyped keys
+    //   - timestamp: timestamp (required) - Time of test
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.uid;
+    }
+
+    function uidUnchanged() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'createdAt', 'streak', 'maxStreak', 'lastTestDate', 'proUntil']) &&
+             data.uid == request.auth.uid &&
+             data.email is string &&
+             (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() < 100)) &&
+             (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() < 500)) &&
+             data.createdAt is timestamp &&
+             (!('streak' in data) || data.streak is number && data.streak >= 0) &&
+             (!('maxStreak' in data) || data.maxStreak is number && data.maxStreak >= 0) &&
+             (!('lastTestDate' in data) || data.lastTestDate == null || (data.lastTestDate is string && data.lastTestDate.size() <= 20)) &&
+             (!('proUntil' in data) || data.proUntil == null || data.proUntil is timestamp);
+    }
+    
+    function isValidTestResult(data) {
+      return hasOnlyAllowedFields(['uid', 'examType', 'wpm', 'accuracy', 'errors', 'totalChars', 'timeElapsed', 'isEarlyEnd', 'backspaceCount', 'mistypedKeys', 'timestamp']) &&
+             data.uid == request.auth.uid &&
+             data.examType in ['RRB', 'SSC'] &&
+             data.wpm is number && data.wpm >= 0 &&
+             data.accuracy is number && data.accuracy >= 0 && data.accuracy <= 100 &&
+             data.errors is number && data.errors >= 0 &&
+             data.totalChars is number && data.totalChars >= 0 &&
+             data.timeElapsed is number && data.timeElapsed >= 0 &&
+             data.isEarlyEnd is bool &&
+             data.backspaceCount is number && data.backspaceCount >= 0 &&
+             data.mistypedKeys is map &&
+             data.timestamp is timestamp;
+    }
+
+    // User Profiles
+    match /users/{userId} {
+      allow read: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidUser(request.resource.data) && (!('proUntil' in request.resource.data) || request.resource.data.proUntil == null);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && areImmutableFieldsUnchanged(['uid', 'createdAt', 'proUntil']);
+      allow delete: if false;
+    }
+
+    // License Keys
+    match /licenseKeys/{keyId} {
+      allow read, write: if false; // Only accessible via server-side Admin SDK
+    }
+
+    // Test Results
+    match /testResults/{resultId} {
+      allow read: if isAuthenticated() && resource.data.uid == request.auth.uid;
+      allow create: if isAuthenticated() && request.resource.data.uid == request.auth.uid && isValidTestResult(request.resource.data);
+      allow update, delete: if false; // Results are immutable
+    }
+  }
+}
